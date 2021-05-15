@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -14,6 +16,8 @@ pagetable_t kernel_pagetable;
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
+
+void add_to_memory(uint64 a, char *mem);
 
 // Make a direct-map page table for the kernel.
 pagetable_t
@@ -178,6 +182,32 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if(do_free){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
+      #ifndef NONE
+      if(myproc()->pid > 2 && myproc()->pagetable == pagetable){
+        struct proc *p = myproc();
+        struct page_metadata *pg;
+        for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+          if(pg->va == va){
+            pg->mem = 0;
+            pg->state = 0;
+            pg->offset = 0;
+            pg->va = 0;
+            p->num_pages_in_psyc--;
+            break;
+          }
+        }
+        for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
+          if(pg->va == va){
+            pg->mem = 0;
+            pg->state = 0;
+            pg->offset = 0;
+            pg->va = 0;
+            p->num_pages_in_swapfile--;
+            break;
+          }
+        }
+      }
+      #endif
     }
     *pte = 0;
   }
@@ -236,6 +266,14 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
+    #ifndef NONE
+    //check if there is free space in memory
+    //if no - swap_into_file
+    //after this - find free page_metadata and fill it with new allocated page details
+    if(myproc()->pid > 2){
+      add_to_memory(a, mem);
+    }
+    #endif
   }
   return newsz;
 }
@@ -305,8 +343,16 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
+    if(!(*pte & PTE_V) && !(*pte & PTE_PG))
       panic("uvmcopy: page not present");
+    #ifndef NONE
+    //If page was swaped out to file, new proccess will have it in swapfile too
+    if(myproc()->pid > 2 && *pte & PTE_PG){
+      pte_t *npte = walk(new, i, 1);
+      *npte = *pte;
+      continue;
+    }
+    #endif
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -427,5 +473,172 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return 0;
   } else {
     return -1;
+  }
+}
+
+int find_free_index_in_memory_array(){
+  struct proc *p = myproc();
+  struct page_metadata *pg;
+  for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+    if(!pg->state){
+      return (int)(pg - p->pages_in_memory);
+    }
+  }
+  return -1;
+}
+
+int get_page_scfifo(){
+  return 1;
+}
+// get page that will be swaped out (Task 2)
+// Returns page index in pages_in_memory array, this page will be swapped out
+
+int get_page_by_alg(){
+  #ifdef SCFIFO
+  return get_page_scfifo();
+  #endif
+  #ifdef NFUA
+  //return
+  #endif
+  #ifndef LAPA
+  //return
+  #endif
+  #ifdef NONE
+  return 0; //will never got here
+  #endif
+}
+
+
+//Chose page to remove from main memory (using one of task2 algorithms) 
+//and swap this page into file
+void swap_into_file(){
+  struct proc *p = myproc();
+  int page_index_to_swap = get_page_by_alg(); //Index1
+
+  struct page_metadata *pg_to_swap = &p->pages_in_memory[page_index_to_swap];
+
+  //find free space in swaped pages array,
+  //add selected to swap out page to this array 
+  //and write this page to swapfile.
+  struct page_metadata *pg;
+  for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
+    if(!pg->state){
+      pg->state = 1;
+      pg->va = pg_to_swap->va;
+      pg->offset = (pg - p->pages_in_swapfile)*PGSIZE;
+      pg->mem = pg_to_swap->mem;
+      
+      writeToSwapFile(p, (char*)pg->va, pg->offset, PGSIZE); //va or mem??
+      
+      p->num_pages_in_swapfile++;
+
+      pg_to_swap->state = 0;
+      pg_to_swap->offset = 0;
+      pg_to_swap->mem = 0;
+      pg_to_swap->va = 0;
+      p->num_pages_in_psyc--;
+      
+      break;
+    }
+  }
+
+  pte_t* pte = walk(p->pagetable, pg->va, 0);
+  uint64 pa = PTE2PA(*pte);
+  kfree(pg->mem); //free pa? or free pg->mem? 
+
+  printf("mem= %p, pa= %p \n", pg->mem, pa);
+  pg->mem = 0;
+
+  //set pte flags:
+  *pte |= PTE_PG;     //paged out to secondary storage
+  *pte &= ~PTE_V;     //Whenever a page is moved to the paging file,
+                      // it should be marked in the process' page table entry that the page is not present.
+                      //This is done by clearing the valid (PTE_V) flag. 
+  
+  // todo : sfence_vma() where todo it?
+
+}
+
+//Adding new page created by uvmalloc() to proccess pages
+void add_to_memory(uint64 a, char *mem){
+  struct proc *p = myproc();
+  //No free space in the psyc memory,
+  //Chose page to remove from main memory (using one of task2 algorithms) 
+  //and swap this page into file
+  if(p->num_pages_in_psyc == MAX_PSYC_PAGES){
+    swap_into_file();
+  }
+  //Now we have free space in psyc memory (maybe we had free space before too):
+  //just add all page information to pages_in_memory array:
+  int free_index_memory_array = find_free_index_in_memory_array();
+  struct page_metadata *pg = &p->pages_in_memory[free_index_memory_array];
+  
+  pg->state = 1;
+  pg->va = a;
+  pg->mem = mem;
+
+  p->num_pages_in_psyc++;
+
+  pte_t* pte = walk(p->pagetable, pg->va, 0);
+  //set pte flags:
+  *pte &= ~PTE_PG;     //paged in to memory - turn off bit 
+  *pte |= PTE_V;
+
+
+}
+
+//Handle page fault - called from trap.c
+int handle_pagefault(){
+  struct proc *p = myproc();
+  uint64 va = r_stval();
+  
+  pte_t* pte = walk(p->pagetable, va, 0);
+  //If the page was swaped out, we should bring it back to memory
+  if(*pte & PTE_PG){
+    //If no place in memory - swap out page
+    if(p->num_pages_in_psyc == MAX_PSYC_PAGES){
+      swap_into_file();
+    }
+
+    //Now we have free space in psyc memory (maybe we had free space before too):
+    //bring page from swapFile and put it into physic memory
+    uint64 va1 = PGROUNDDOWN(va);
+    char *mem = kalloc();
+    
+    struct page_metadata *pg;
+    for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
+      if(pg->va == va1){
+        pte_t* pte = walk(p->pagetable, va1, 0);
+
+        mappages(p->pagetable, va1, PGSIZE ,(uint64)mem, PTE_W | PTE_U);
+        readFromSwapFile(p, mem, pg->offset, PGSIZE);
+
+        int free_index_memory_array = find_free_index_in_memory_array();
+        
+        struct page_metadata *free_memory_page = &p->pages_in_memory[free_index_memory_array];
+
+        //fill free page in memory with current page
+        free_memory_page->state = 1;
+        free_memory_page->va = pg->va;
+        free_memory_page->mem = mem;
+        free_memory_page->offset = 0;
+
+        //now this page in swapfile is free:
+        p->num_pages_in_swapfile--;
+        pg->state = 0;
+        pg->offset = 0;
+        pg->mem = 0;
+        pg->va = 0;
+        p->num_pages_in_psyc++;
+
+        //set pte flags:
+        *pte &= ~PTE_PG;     //paged in to memory - turn off bit 
+        *pte |= PTE_V;
+        break;
+      }
+    }
+    return 3;
+  }else{
+    return 0; //this is segfault
   }
 }

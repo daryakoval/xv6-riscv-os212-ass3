@@ -141,6 +141,12 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  #ifndef NONE
+  printf("got here allocproc\n");
+  createSwapFile(p);
+  p->num_pages_in_psyc = 0;
+  p->num_pages_in_swapfile = 0;
+  #endif
   return p;
 }
 
@@ -155,6 +161,26 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  #ifndef NONE
+  printf("got here freeproc\n");
+  if(p->pid > 2){
+    p->num_pages_in_psyc = 0;
+    struct page_metadata *pg;
+    for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+      pg->mem = 0;
+      pg->state = 0;
+      pg->offset = 0;
+      pg->va = 0;
+    }
+    for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
+      pg->mem = 0;
+      pg->state = 0;
+      pg->offset = 0;
+      pg->va = 0;
+    }
+  }
+  removeSwapFile(p);
+  #endif
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -164,6 +190,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->num_pages_in_swapfile = 0;
+  p->num_pages_in_psyc = 0;
 }
 
 // Create a user page table for a given process,
@@ -304,6 +332,42 @@ fork(void)
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
+
+#ifndef NONE
+printf("got here fork\n");
+if(p->pid > 2){
+
+  struct page_metadata *pg;
+  struct page_metadata *npg = np->pages_in_memory;
+
+  for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++, npg++){
+    npg->state = pg->state;
+    npg->mem = pg->mem;
+    npg->offset = pg->offset;
+    npg->va = pg->va;
+  }
+
+   npg = np->pages_in_swapfile;
+  for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++, npg++){
+    npg->state = pg->state;
+    npg->mem = pg->mem;
+    npg->offset = pg->offset;
+    npg->va = pg->va;
+  }
+
+  np->num_pages_in_psyc = p->num_pages_in_psyc;
+  np->num_pages_in_swapfile = p->num_pages_in_swapfile;
+
+  char* buffer = kalloc();
+
+  for(i = 0; i < p->num_pages_in_swapfile; i++){
+    readFromSwapFile(p, buffer, i*PGSIZE, PGSIZE);
+    writeToSwapFile(np, buffer, i*PGSIZE, PGSIZE);
+  }
+
+  kfree(buffer);
+}
+#endif
 
   release(&np->lock);
 
