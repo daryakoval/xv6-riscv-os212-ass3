@@ -141,12 +141,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
-  #ifndef NONE
-  printf("got here allocproc\n");
-  createSwapFile(p);
-  p->num_pages_in_psyc = 0;
-  p->num_pages_in_swapfile = 0;
-  #endif
+  printf("finish here allocproc pid: %d\n", p->pid);
   return p;
 }
 
@@ -164,22 +159,16 @@ freeproc(struct proc *p)
   #ifndef NONE
   printf("got here freeproc\n");
   if(p->pid > 2){
-    p->num_pages_in_psyc = 0;
     struct page_metadata *pg;
     for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
-      pg->mem = 0;
       pg->state = 0;
-      pg->offset = 0;
       pg->va = 0;
     }
     for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
-      pg->mem = 0;
       pg->state = 0;
-      pg->offset = 0;
       pg->va = 0;
     }
   }
-  removeSwapFile(p);
   #endif
   p->pagetable = 0;
   p->sz = 0;
@@ -192,6 +181,7 @@ freeproc(struct proc *p)
   p->state = UNUSED;
   p->num_pages_in_swapfile = 0;
   p->num_pages_in_psyc = 0;
+  printf("finish freeproc\n");
 }
 
 // Create a user page table for a given process,
@@ -333,7 +323,14 @@ fork(void)
 
   pid = np->pid;
 
+  release(&np->lock);
+
 #ifndef NONE
+if(np->pid > 2){
+  printf("starting create swapfile\n");
+  createSwapFile(np);
+}
+
 printf("got here fork\n");
 if(p->pid > 2){
 
@@ -342,16 +339,12 @@ if(p->pid > 2){
 
   for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++, npg++){
     npg->state = pg->state;
-    npg->mem = pg->mem;
-    npg->offset = pg->offset;
     npg->va = pg->va;
   }
 
    npg = np->pages_in_swapfile;
   for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++, npg++){
     npg->state = pg->state;
-    npg->mem = pg->mem;
-    npg->offset = pg->offset;
     npg->va = pg->va;
   }
 
@@ -360,16 +353,18 @@ if(p->pid > 2){
 
   char* buffer = kalloc();
 
+  printf("got here fork num_pages_in_swapfile: %d\n", p->num_pages_in_swapfile);
+
   for(i = 0; i < p->num_pages_in_swapfile; i++){
     readFromSwapFile(p, buffer, i*PGSIZE, PGSIZE);
     writeToSwapFile(np, buffer, i*PGSIZE, PGSIZE);
   }
 
+  printf("before free\n");
+
   kfree(buffer);
 }
 #endif
-
-  release(&np->lock);
 
   acquire(&wait_lock);
   np->parent = p;
@@ -379,6 +374,7 @@ if(p->pid > 2){
   np->state = RUNNABLE;
   release(&np->lock);
 
+  printf("finish fork: new pid: %d\n", np->pid);
   return pid;
 }
 
@@ -417,6 +413,8 @@ exit(int status)
     }
   }
 
+  removeSwapFile(p);
+
   begin_op();
   iput(p->cwd);
   end_op();
@@ -436,6 +434,8 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
+  
+  printf("pid finished exit %d\n", p->pid);
 
   // Jump into the scheduler, never to return.
   sched();
@@ -474,6 +474,8 @@ wait(uint64 addr)
           freeproc(np);
           release(&np->lock);
           release(&wait_lock);
+          //removeSwapFile(p);
+          printf("parent finish waiting\n");
           return pid;
         }
         release(&np->lock);

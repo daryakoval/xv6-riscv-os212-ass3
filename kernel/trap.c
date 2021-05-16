@@ -216,6 +216,7 @@ devintr()
   }
   #ifndef NONE
   else if (scause == 13 || scause == 15){
+    printf("got here starting handle pagefault\n");
     return handle_pagefault();
   }
   #endif

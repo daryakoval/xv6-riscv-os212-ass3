@@ -83,10 +83,8 @@ struct trapframe {
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 struct page_metadata{
-  int offset;     //offset is the swap file
   uint64 va;      //virtual address
   int state;      // 0 = UNUSED, 1 = USED
-  char *mem;      // returnd value from kalloc - need to free this memory in swap into file
 };
 
 
