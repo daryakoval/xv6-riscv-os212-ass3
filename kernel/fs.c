@@ -775,15 +775,12 @@ createSwapFile(struct proc* p)
   itoa(p->pid, path+ 6);
 
   begin_op();
-  printf("got here swap1\n");
   
   struct inode * in = create(path, T_FILE, 0, 0);
   iunlock(in);
   p->swapFile = filealloc();
   if (p->swapFile == 0)
     panic("no slot for files on /store");
-
-  printf("got here swap2\n");
 
   p->swapFile->ip = in;
   p->swapFile->type = FD_INODE;

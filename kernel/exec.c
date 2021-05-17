@@ -22,7 +22,6 @@ exec(char *path, char **argv)
   struct proc *p = myproc();
 
   #ifndef NONE
-  printf("proc %d starting exec\n", p->pid);
   if(p->pid > 2){
     struct page_metadata *pg;
     for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
