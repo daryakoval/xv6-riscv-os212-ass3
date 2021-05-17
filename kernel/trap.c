@@ -213,7 +213,16 @@ devintr()
     w_sip(r_sip() & ~2);
 
     return 2;
-  } else {
+  }
+  #ifndef NONE
+  else if (scause == 13 || scause == 15){
+    #ifdef YES
+    printf("starting handle pagefault\n");
+    #endif
+    return handle_pagefault();
+  }
+  #endif
+  else {
     return 0;
   }
 }

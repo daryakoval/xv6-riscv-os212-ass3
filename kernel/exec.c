@@ -21,6 +21,24 @@ exec(char *path, char **argv)
   pagetable_t pagetable = 0, oldpagetable;
   struct proc *p = myproc();
 
+  #ifndef NONE
+  if(p->pid > 2){
+    struct page_metadata *pg;
+    for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+      pg->state = 0;
+      pg->va = 0;
+    }
+    for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
+      pg->state = 0;
+      pg->va = 0;
+    }
+    p->num_pages_in_swapfile = 0;
+    p->num_pages_in_psyc = 0;
+    removeSwapFile(p);
+    createSwapFile(p);
+  }
+  #endif
+
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -107,7 +125,7 @@ exec(char *path, char **argv)
     if(*s == '/')
       last = s+1;
   safestrcpy(p->name, last, sizeof(p->name));
-    
+
   // Commit to the user image.
   oldpagetable = p->pagetable;
   p->pagetable = pagetable;

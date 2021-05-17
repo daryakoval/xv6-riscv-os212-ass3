@@ -155,6 +155,19 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  #ifndef NONE
+  if(p->pid > 2){
+    struct page_metadata *pg;
+    for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+      pg->state = 0;
+      pg->va = 0;
+    }
+    for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
+      pg->state = 0;
+      pg->va = 0;
+    }
+  }
+  #endif
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -164,6 +177,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->num_pages_in_swapfile = 0;
+  p->num_pages_in_psyc = 0;
 }
 
 // Create a user page table for a given process,
@@ -257,10 +272,17 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    #ifdef YES
+    printf("starting grow\n");
+    #endif
+
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
   } else if(n < 0){
+    #ifdef YES
+    printf("starting ungrow\n");
+    #endif
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
@@ -307,6 +329,41 @@ fork(void)
 
   release(&np->lock);
 
+#ifndef NONE
+if(np->pid > 2){
+  createSwapFile(np);
+}
+
+if(p->pid > 2){
+
+  for(i = 0; i < MAX_PSYC_PAGES; i++){
+    np->pages_in_memory[i].state = p->pages_in_memory[i].state;
+    np->pages_in_memory[i].va = p->pages_in_memory[i].va;
+    //printf("i: %d, va: %p, state: %d in memory.\n", i, np->pages_in_memory[i].va, np->pages_in_memory[i].state);
+    np->pages_in_swapfile[i].state = p->pages_in_swapfile[i].state;
+    np->pages_in_swapfile[i].va = p->pages_in_swapfile[i].va;
+    //printf("i: %d, va: %p, state: %d in swapfile.\n", i, np->pages_in_swapfile[i].va, np->pages_in_swapfile[i].state);
+  }
+
+  np->num_pages_in_psyc = p->num_pages_in_psyc;
+  np->num_pages_in_swapfile = p->num_pages_in_swapfile;
+
+  char* buffer = kalloc();
+
+  #ifdef YES
+  printf("got here fork num_pages_in_swapfile: %d\n", p->num_pages_in_swapfile);
+  printf("got here fork num_pages_in_phyc: %d\n", p->num_pages_in_psyc);
+  #endif
+
+  for(i = 0; i < MAX_PSYC_PAGES; i++){
+    readFromSwapFile(p, buffer, i*PGSIZE, PGSIZE);
+    writeToSwapFile(np, buffer, i*PGSIZE, PGSIZE);
+  }
+
+  kfree(buffer);
+}
+#endif
+
   acquire(&wait_lock);
   np->parent = p;
   release(&wait_lock);
@@ -315,6 +372,9 @@ fork(void)
   np->state = RUNNABLE;
   release(&np->lock);
 
+  #ifdef YES
+  printf("finish fork: new pid: %d\n", np->pid);
+  #endif
   return pid;
 }
 
@@ -353,6 +413,8 @@ exit(int status)
     }
   }
 
+  if(p->pid > 2) removeSwapFile(p);
+
   begin_op();
   iput(p->cwd);
   end_op();
@@ -372,7 +434,7 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
-
+  
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
