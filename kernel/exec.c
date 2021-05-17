@@ -27,10 +27,12 @@ exec(char *path, char **argv)
     for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
       pg->state = 0;
       pg->va = 0;
+      pg->age = 0;
     }
     for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
       pg->state = 0;
       pg->va = 0;
+      pg->age = 0;
     }
     p->num_pages_in_swapfile = 0;
     p->num_pages_in_psyc = 0;

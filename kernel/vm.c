@@ -192,6 +192,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
         if(pg->va == a){
           pg->state = 0;
           pg->va = 0;
+          pg->age = 0;
           p->num_pages_in_psyc--;
           break;
         }
@@ -203,6 +204,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
         if(pg->va == a){
           pg->state = 0;
           pg->va = 0;
+          pg->age = 0;
           p->num_pages_in_swapfile--;
           break;
         }
@@ -487,6 +489,49 @@ int find_free_index_in_memory_array(){
   return -1;
 }
 
+
+void update_age(struct proc* p){
+  struct page_metadata *pg;
+  pte_t* pte;
+  for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+    if(pg->state){
+      pte = walk(p->pagetable, pg->va, 0);
+      if(*pte & PTE_A){
+        //When a page got accessed (check the status of the PTE_A), 
+        //the counter isshifted right by one bit, 
+        //and then the digit 1 is added to the most significant bit
+        pg->age = (pg->age >> 1);
+        pg->age |= (0x8000000000000000);
+      }
+      else{
+        //If a page remained without visits, the counter is just shifted right by one bit 
+        pg->age = (pg->age >> 1); 
+      }
+      #ifdef YES
+      //printf("cleared pte_A for page num =%d\n",(pg - p->pages_in_memory));
+      #endif
+      *pte &= ~ PTE_A; //turn off pte_a bit
+    }
+  }
+}
+
+int get_page_nfua(){
+  struct proc *p = myproc();
+  struct page_metadata *pg;
+  uint64 min_age = ~0;
+  int min_age_index = 1;
+  for(pg = p->pages_in_memory+1; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+    if(pg->state && pg->age < min_age){
+      #ifdef YES
+      printf("min_age was = %p, now= %p, array index = %d\n", min_age, pg->age, (pg - p->pages_in_memory));
+      #endif
+      min_age = pg->age;
+      min_age_index = (int)(pg - p->pages_in_memory);
+    }
+  }
+  return min_age_index;
+}
+
 int get_page_scfifo(){
   //TODO change it
   return 1;
@@ -499,13 +544,13 @@ int get_page_by_alg(){
   return get_page_scfifo();
   #endif
   #ifdef NFUA
-  //return
+  return get_page_nfua();
   #endif
   #ifndef LAPA
   //return
   #endif
   #ifdef NONE
-  return 0; //will never got here
+  return 1; //will never got here
   #endif
 }
 
@@ -587,6 +632,9 @@ void add_to_memory(uint64 a, pagetable_t pagetable){
 
   pg->state = 1;
   pg->va = a;
+  #ifdef NFUA
+  pg->age = 0;
+  #endif
 
   p->num_pages_in_psyc++;
 
@@ -632,15 +680,18 @@ int handle_pagefault(){
         //fill free page in memory with current page
         free_memory_page->state = 1;
         free_memory_page->va = pg->va;
+        free_memory_page->age = 0;    //when a page is created or loaded into 
+                                      //the RAM, reset its counter to 0.
 
         //now this page in swapfile is free:
         p->num_pages_in_swapfile--;
         pg->state = 0;
         pg->va = 0;
+        pg->age = 0;
         p->num_pages_in_psyc++;
 
         //set pte flags:
-        *pte = PA2PTE((uint64)mem) | PTE_FLAGS(*pte); //map new adress? 
+        *pte = PA2PTE((uint64)mem) | PTE_FLAGS(*pte); //map new adress 
         *pte &= ~PTE_PG;     //paged in to memory - turn off bit 
         *pte |= PTE_V;
         #ifdef YES

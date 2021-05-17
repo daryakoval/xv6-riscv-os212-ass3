@@ -85,6 +85,7 @@ enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 struct page_metadata{
   uint64 va;      //virtual address
   int state;      // 0 = UNUSED, 1 = USED
+  uint64 age;
 };
 
 

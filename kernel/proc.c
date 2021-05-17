@@ -161,10 +161,12 @@ freeproc(struct proc *p)
     for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
       pg->state = 0;
       pg->va = 0;
+      pg->age = 0;
     }
     for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
       pg->state = 0;
       pg->va = 0;
+      pg->age = 0;
     }
   }
   #endif
@@ -339,6 +341,7 @@ if(p->pid > 2){
   for(i = 0; i < MAX_PSYC_PAGES; i++){
     np->pages_in_memory[i].state = p->pages_in_memory[i].state;
     np->pages_in_memory[i].va = p->pages_in_memory[i].va;
+    np->pages_in_memory[i].age = p->pages_in_memory[i].age;
     //printf("i: %d, va: %p, state: %d in memory.\n", i, np->pages_in_memory[i].va, np->pages_in_memory[i].state);
     np->pages_in_swapfile[i].state = p->pages_in_swapfile[i].state;
     np->pages_in_swapfile[i].va = p->pages_in_swapfile[i].va;
@@ -517,6 +520,7 @@ scheduler(void)
         c->proc = p;
         swtch(&c->context, &p->context);
 
+        update_age(p);
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
