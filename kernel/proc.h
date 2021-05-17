@@ -82,6 +82,12 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct page_metadata{
+  uint64 va;      //virtual address
+  int state;      // 0 = UNUSED, 1 = USED
+};
+
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -106,5 +112,10 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  struct file *swapFile;
+  struct file *swapFile;      //pointer to swapfile
+  struct page_metadata pages_in_memory[MAX_PSYC_PAGES];  //to know which pages are in memory
+  struct page_metadata pages_in_swapfile[MAX_PSYC_PAGES];  //to know which pages are in swapfile
+  int num_pages_in_psyc;        //number of pages in memory
+  int num_pages_in_swapfile;    //number of pages in swapfile
+ 
 };

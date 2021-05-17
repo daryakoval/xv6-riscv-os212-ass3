@@ -141,6 +141,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  printf("finish here allocproc pid: %d\n", p->pid);
   return p;
 }
 
@@ -155,6 +156,20 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  #ifndef NONE
+  printf("got here freeproc\n");
+  if(p->pid > 2){
+    struct page_metadata *pg;
+    for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+      pg->state = 0;
+      pg->va = 0;
+    }
+    for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
+      pg->state = 0;
+      pg->va = 0;
+    }
+  }
+  #endif
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -164,6 +179,9 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->num_pages_in_swapfile = 0;
+  p->num_pages_in_psyc = 0;
+  printf("finish freeproc\n");
 }
 
 // Create a user page table for a given process,
@@ -257,16 +275,109 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    printf("starting grow\n");
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
   } else if(n < 0){
+    printf("starting ungrow\n");
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
   p->sz = sz;
   return 0;
 }
 
+/*int
+fork(void)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  // Allocate process.
+  if((np = allocproc()) == 0){
+    return -1;
+  }
+
+  // Copy user memory from parent to child.
+  printf("start uvm copy\n");
+  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+  np->sz = p->sz;
+
+  // copy saved user registers.
+  *(np->trapframe) = *(p->trapframe);
+
+  // Cause fork to return 0 in the child.
+  np->trapframe->a0 = 0;
+
+  // increment reference counts on open file descriptors.
+  for(i = 0; i < NOFILE; i++)
+    if(p->ofile[i])
+      np->ofile[i] = filedup(p->ofile[i]);
+  np->cwd = idup(p->cwd);
+
+  safestrcpy(np->name, p->name, sizeof(p->name));
+
+  pid = np->pid;
+
+  release(&np->lock);
+
+#ifndef NONE
+if(np->pid > 2){
+  printf("starting create swapfile\n");
+  createSwapFile(np);
+}
+
+printf("got here fork\n");
+if(p->pid > 2){
+
+  //struct page_metadata *pg;
+  //struct page_metadata *npg = np->pages_in_memory;
+
+  for(i = 0; i < MAX_PSYC_PAGES; i++){
+    np->pages_in_memory[i].state = p->pages_in_memory[i].state;
+    np->pages_in_memory[i].va = p->pages_in_memory[i].va;
+    //printf("i: %d, va: %p, state: %d in memory.\n", i, np->pages_in_memory[i].va, np->pages_in_memory[i].state);
+    np->pages_in_swapfile[i].state = p->pages_in_swapfile[i].state;
+    np->pages_in_swapfile[i].va = p->pages_in_swapfile[i].va;
+    //printf("i: %d, va: %p, state: %d in swapfile.\n", i, np->pages_in_swapfile[i].va, np->pages_in_swapfile[i].state);
+  }
+
+  np->num_pages_in_psyc = p->num_pages_in_psyc;
+  np->num_pages_in_swapfile = p->num_pages_in_swapfile;
+
+  char* buffer = kalloc();
+
+  //printf("got here fork num_pages_in_swapfile: %d\n", p->num_pages_in_swapfile);
+  //printf("got here fork num_pages_in_phyc: %d\n", p->num_pages_in_psyc);
+
+  for(i = 0; i < MAX_PSYC_PAGES; i++){
+    readFromSwapFile(p, buffer, i*PGSIZE, PGSIZE);
+    writeToSwapFile(np, buffer, i*PGSIZE, PGSIZE);
+    //printf("read write : i: %d, offset: %d.\n", i, i*PGSIZE);
+  }
+
+  printf("before free\n");
+
+  kfree(buffer);
+}
+#endif
+
+  acquire(&wait_lock);
+  np->parent = p;
+  release(&wait_lock);
+
+  acquire(&np->lock);
+  np->state = RUNNABLE;
+  release(&np->lock);
+
+  printf("finish fork: new pid: %d\n", np->pid);
+  return pid;
+}*/
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int
@@ -307,6 +418,47 @@ fork(void)
 
   release(&np->lock);
 
+#ifndef NONE
+if(np->pid > 2){
+  printf("starting create swapfile\n");
+  createSwapFile(np);
+}
+
+printf("got here fork\n");
+if(p->pid > 2){
+
+  struct page_metadata *pg;
+  struct page_metadata *npg = np->pages_in_memory;
+
+  for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++, npg++){
+    npg->state = pg->state;
+    npg->va = pg->va;
+  }
+
+   npg = np->pages_in_swapfile;
+  for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++, npg++){
+    npg->state = pg->state;
+    npg->va = pg->va;
+  }
+
+  np->num_pages_in_psyc = p->num_pages_in_psyc;
+  np->num_pages_in_swapfile = p->num_pages_in_swapfile;
+
+  char* buffer = kalloc();
+
+  printf("got here fork num_pages_in_swapfile: %d\n", p->num_pages_in_swapfile);
+
+  for(i = 0; i < MAX_PSYC_PAGES; i++){
+    readFromSwapFile(p, buffer, i*PGSIZE, PGSIZE);
+    writeToSwapFile(np, buffer, i*PGSIZE, PGSIZE);
+  }
+
+  printf("before free\n");
+
+  kfree(buffer);
+}
+#endif
+
   acquire(&wait_lock);
   np->parent = p;
   release(&wait_lock);
@@ -315,6 +467,7 @@ fork(void)
   np->state = RUNNABLE;
   release(&np->lock);
 
+  printf("finish fork: new pid: %d\n", np->pid);
   return pid;
 }
 
@@ -353,6 +506,8 @@ exit(int status)
     }
   }
 
+  if(p->pid > 2) removeSwapFile(p);
+
   begin_op();
   iput(p->cwd);
   end_op();
@@ -372,6 +527,8 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
+  
+  printf("pid finished exit %d\n", p->pid);
 
   // Jump into the scheduler, never to return.
   sched();
@@ -410,6 +567,8 @@ wait(uint64 addr)
           freeproc(np);
           release(&np->lock);
           release(&wait_lock);
+          //removeSwapFile(p);
+          printf("parent finish waiting\n");
           return pid;
         }
         release(&np->lock);
