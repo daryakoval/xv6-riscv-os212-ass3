@@ -536,9 +536,14 @@ int get_page_scfifo(){
   //TODO change it
   return 1;
 }
+
+int get_page_lapa(){
+  //TODO change it
+  return 1;
+}
+
 // get page that will be swaped out (Task 2)
 // Returns page index in pages_in_memory array, this page will be swapped out
-
 int get_page_by_alg(){
   #ifdef SCFIFO
   return get_page_scfifo();
@@ -546,8 +551,8 @@ int get_page_by_alg(){
   #ifdef NFUA
   return get_page_nfua();
   #endif
-  #ifndef LAPA
-  //return
+  #ifdef LAPA
+  return get_page_lapa();
   #endif
   #ifdef NONE
   return 1; //will never got here
@@ -635,6 +640,9 @@ void add_to_memory(uint64 a, pagetable_t pagetable){
   #ifdef NFUA
   pg->age = 0;
   #endif
+  #ifdef LAPA
+  pg->age = (uint64)~0;
+  #endif
 
   p->num_pages_in_psyc++;
 
@@ -680,9 +688,13 @@ int handle_pagefault(){
         //fill free page in memory with current page
         free_memory_page->state = 1;
         free_memory_page->va = pg->va;
+        #if NUFA
         free_memory_page->age = 0;    //when a page is created or loaded into 
                                       //the RAM, reset its counter to 0.
-
+        #endif
+        #if LAPA
+        free_memory_page->age = (uint64)~0;
+        #endif
         //now this page in swapfile is free:
         p->num_pages_in_swapfile--;
         pg->state = 0;
