@@ -536,6 +536,30 @@ int get_page_scfifo(){
   //TODO change it
   return 1;
 }
+
+int get_page_lapa(){
+  struct proc *p = myproc();
+  struct page_metadata *pg;
+  int min_number_of_1=64;
+  int index_with_min_1=-1;
+  for(pg = p->pages_in_memory+1; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
+    int counter=0;
+    if(pg->state){
+        for(int i=0;i<64;i++){ // do a mask for the 64 bits 
+          uint64 mask = 1 << i;
+          if(pg->age & mask!=0)// if 1 is found 
+              counter++;
+          if(counter>=min_number_of_1) // in case count is bigger than current min 
+            break;
+        }
+        if(counter<min_number_of_1){
+          min_number_of_1=counter;
+          index_with_min_1=(int)(pg - p->pages_in_memory);
+        }
+      }
+    }
+    return index_with_min_1;
+}
 // get page that will be swaped out (Task 2)
 // Returns page index in pages_in_memory array, this page will be swapped out
 
@@ -547,7 +571,7 @@ int get_page_by_alg(){
   return get_page_nfua();
   #endif
   #ifndef LAPA
-  //return
+  return get_page_lapa();
   #endif
   #ifdef NONE
   return 1; //will never got here
@@ -635,7 +659,6 @@ void add_to_memory(uint64 a, pagetable_t pagetable){
   #ifdef NFUA
   pg->age = 0;
   #endif
-
   p->num_pages_in_psyc++;
 
   pte_t* pte = walk(pagetable, pg->va, 0);
