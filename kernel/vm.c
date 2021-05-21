@@ -540,6 +540,7 @@ int get_page_scfifo(){
 }
 
 int get_page_lapa(){
+<<<<<<< HEAD
   struct proc *p = myproc();
   struct page_metadata *pg;
   int min_number_of_1=64;
@@ -562,9 +563,14 @@ int get_page_lapa(){
     }
     return index_with_min_1;
 }
+=======
+  //TODO change it
+  return 1;
+}
+
+>>>>>>> bd94c56656c5f132941ca01f055ad9af81d569fe
 // get page that will be swaped out (Task 2)
 // Returns page index in pages_in_memory array, this page will be swapped out
-
 int get_page_by_alg(){
   #ifdef SCFIFO
   return get_page_scfifo();
@@ -572,7 +578,11 @@ int get_page_by_alg(){
   #ifdef NFUA
   return get_page_nfua();
   #endif
+<<<<<<< HEAD
   #ifndef LAPA
+=======
+  #ifdef LAPA
+>>>>>>> bd94c56656c5f132941ca01f055ad9af81d569fe
   return get_page_lapa();
   #endif
   #ifdef NONE
@@ -661,6 +671,13 @@ void add_to_memory(uint64 a, pagetable_t pagetable){
   #ifdef NFUA
   pg->age = 0;
   #endif
+<<<<<<< HEAD
+=======
+  #ifdef LAPA
+  pg->age = (uint64)~0;
+  #endif
+
+>>>>>>> bd94c56656c5f132941ca01f055ad9af81d569fe
   p->num_pages_in_psyc++;
 
   pte_t* pte = walk(pagetable, pg->va, 0);
@@ -705,9 +722,13 @@ int handle_pagefault(){
         //fill free page in memory with current page
         free_memory_page->state = 1;
         free_memory_page->va = pg->va;
+        #if NUFA
         free_memory_page->age = 0;    //when a page is created or loaded into 
                                       //the RAM, reset its counter to 0.
-
+        #endif
+        #if LAPA
+        free_memory_page->age = (uint64)~0;
+        #endif
         //now this page in swapfile is free:
         p->num_pages_in_swapfile--;
         pg->state = 0;
