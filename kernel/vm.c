@@ -534,6 +534,8 @@ int get_page_nfua(){
 
 int get_page_scfifo(){
   //TODO change it
+
+  
   return 1;
 }
 
