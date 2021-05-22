@@ -119,6 +119,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->creationTimeGenerator=0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -162,11 +163,13 @@ freeproc(struct proc *p)
       pg->state = 0;
       pg->va = 0;
       pg->age = 0;
+      pg->creationOrder=0;
     }
     for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
       pg->state = 0;
       pg->va = 0;
       pg->age = 0;
+      pg->creationOrder=0;
     }
   }
   #endif
@@ -181,6 +184,7 @@ freeproc(struct proc *p)
   p->state = UNUSED;
   p->num_pages_in_swapfile = 0;
   p->num_pages_in_psyc = 0;
+  p->creationTimeGenerator=0;
 }
 
 // Create a user page table for a given process,
@@ -350,6 +354,7 @@ if(p->pid > 2){
 
   np->num_pages_in_psyc = p->num_pages_in_psyc;
   np->num_pages_in_swapfile = p->num_pages_in_swapfile;
+  np->creationTimeGenerator=p->creationTimeGenerator;
 
   char* buffer = kalloc();
 

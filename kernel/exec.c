@@ -28,11 +28,13 @@ exec(char *path, char **argv)
       pg->state = 0;
       pg->va = 0;
       pg->age = 0;
+      pg->creationOrder=0;
     }
     for(pg = p->pages_in_swapfile; pg < &p->pages_in_swapfile[MAX_PSYC_PAGES]; pg++){
       pg->state = 0;
       pg->va = 0;
       pg->age = 0;
+      pg->creationOrder=0;
     }
     p->num_pages_in_swapfile = 0;
     p->num_pages_in_psyc = 0;

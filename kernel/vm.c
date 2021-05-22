@@ -194,6 +194,8 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
           pg->va = 0;
           pg->age = 0;
           p->num_pages_in_psyc--;
+
+          
           break;
         }
       }
@@ -206,6 +208,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
           pg->va = 0;
           pg->age = 0;
           p->num_pages_in_swapfile--;
+          
           break;
         }
       }
@@ -533,14 +536,33 @@ int get_page_nfua(){
 }
 
 int get_page_scfifo(){
-  //TODO change it
+  struct proc *p = myproc();
+  struct page_metadata *pg;
+  uint64 min_creation_time = ~0;
+  int min_creation_index = 1;
 
-  
-  return 1;
+  findIndex:
+  min_creation_time = ~0;
+  min_creation_index = 1;
+
+
+  for(pg = p->pages_in_memory+1; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){ // loop over and fine min creation time for fifo 
+    if(pg->state && pg->creationOrder<= min_creation_time){
+      min_creation_index=(int)(pg - p->pages_in_memory);
+      min_creation_time=pg->creationOrder;
+    }
+  }
+  pte_t* pte=walk(p->pagetable,p->pages_in_memory[min_creation_index].va,0); // return addr
+  if((*pte & PTE_A)!=0){ // give second chance 
+  *pte &=~ PTE_A; // trun off the access flag
+  p->pages_in_memory[min_creation_index].creationOrder= ++p->creationTimeGenerator; // first ++ generator tgen update the pg creation time  
+  goto findIndex; // find again 
+  }
+  // if got here then we found pg with min time that PTE_A is turned off
+  return min_creation_index;
 }
 
 int get_page_lapa(){
-<<<<<<< HEAD
   struct proc *p = myproc();
   struct page_metadata *pg;
   int min_number_of_1=64;
@@ -550,7 +572,7 @@ int get_page_lapa(){
     if(pg->state){
         for(int i=0;i<64;i++){ // do a mask for the 64 bits 
           uint64 mask = 1 << i;
-          if(pg->age & mask!=0)// if 1 is found 
+          if((pg->age & mask)!=0)// if 1 is found 
               counter++;
           if(counter>=min_number_of_1) // in case count is bigger than current min 
             break;
@@ -563,12 +585,6 @@ int get_page_lapa(){
     }
     return index_with_min_1;
 }
-=======
-  //TODO change it
-  return 1;
-}
-
->>>>>>> bd94c56656c5f132941ca01f055ad9af81d569fe
 // get page that will be swaped out (Task 2)
 // Returns page index in pages_in_memory array, this page will be swapped out
 int get_page_by_alg(){
@@ -578,11 +594,7 @@ int get_page_by_alg(){
   #ifdef NFUA
   return get_page_nfua();
   #endif
-<<<<<<< HEAD
   #ifndef LAPA
-=======
-  #ifdef LAPA
->>>>>>> bd94c56656c5f132941ca01f055ad9af81d569fe
   return get_page_lapa();
   #endif
   #ifdef NONE
@@ -671,13 +683,13 @@ void add_to_memory(uint64 a, pagetable_t pagetable){
   #ifdef NFUA
   pg->age = 0;
   #endif
-<<<<<<< HEAD
-=======
   #ifdef LAPA
   pg->age = (uint64)~0;
   #endif
+  #ifdef SCFIFO
+  pg->creationOrder=++p->creationTimeGenerator;
+  #endif
 
->>>>>>> bd94c56656c5f132941ca01f055ad9af81d569fe
   p->num_pages_in_psyc++;
 
   pte_t* pte = walk(pagetable, pg->va, 0);
@@ -729,6 +741,7 @@ int handle_pagefault(){
         #if LAPA
         free_memory_page->age = (uint64)~0;
         #endif
+
         //now this page in swapfile is free:
         p->num_pages_in_swapfile--;
         pg->state = 0;
