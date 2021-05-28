@@ -741,6 +741,10 @@ int handle_pagefault(){
         #if LAPA
         free_memory_page->age = (uint64)~0;
         #endif
+        //maybe not here
+        #ifdef SCFIFO
+        pg->creationOrder=++p->creationTimeGenerator;
+        #endif
 
         //now this page in swapfile is free:
         p->num_pages_in_swapfile--;
