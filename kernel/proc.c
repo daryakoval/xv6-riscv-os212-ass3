@@ -525,7 +525,7 @@ scheduler(void)
         c->proc = p;
         swtch(&c->context, &p->context);
 
-        #if NFUA || LAPA
+        #if defined(NFUA) || defined(LAPA)
         update_age(p);
         #endif
         // Process is done running for now.

@@ -734,11 +734,11 @@ int handle_pagefault(){
         //fill free page in memory with current page
         free_memory_page->state = 1;
         free_memory_page->va = pg->va;
-        #if NUFA
+        #ifdef NUFA
         free_memory_page->age = 0;    //when a page is created or loaded into 
                                       //the RAM, reset its counter to 0.
         #endif
-        #if LAPA
+        #ifdef LAPA
         free_memory_page->age = (uint64)~0;
         #endif
         //maybe not here
