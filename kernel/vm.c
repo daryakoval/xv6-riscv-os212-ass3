@@ -546,7 +546,7 @@ int get_page_scfifo(){
   min_creation_index = 1;
 
 
-  for(pg = p->pages_in_memory+1; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){ // loop over and fine min creation time for fifo 
+  for(pg = p->pages_in_memory; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){ // loop over and fine min creation time for fifo 
     if(pg->state && pg->creationOrder<= min_creation_time){
       min_creation_index=(int)(pg - p->pages_in_memory);
       min_creation_time=pg->creationOrder;
@@ -743,7 +743,7 @@ int handle_pagefault(){
         #endif
         //maybe not here
         #ifdef SCFIFO
-        pg->creationOrder=++p->creationTimeGenerator;
+        free_memory_page->creationOrder=++p->creationTimeGenerator;
         #endif
 
         //now this page in swapfile is free:

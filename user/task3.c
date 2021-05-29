@@ -83,58 +83,12 @@ void test3(){
 }
 
 
-// this test does a lot of calculations with a malloced array
-// each calculation need the previous ones
-// need to read and write to the array
-void test4(){
-    fprintf(2,"-------------test4 start ---------------------\n");
-    int *arr = (int *)malloc(2000 * sizeof(int));
-    int i, j;
-    uint counter = 0;
-
-    for(i = 0; i < 2000; i++){
-        *(arr + i) = i;
-    }
-    for(i = 0; i < 2000; i++){
-        for(j = 0; j <= i; j ++){
-            counter += *(arr + j);
-        }
-        printf("%d: counter is %d\n", i, counter);
-    }
-    printf("final counter is %d\n",  counter);
-    fprintf(2,"-------------test4 finished ---------------------\n");
-} 
-
-void aprint(int num){
-    printf("%d a!\n", num);
-}
-
-void bprint(int num){
-    printf("%d b!\n", num);
-}
-
-void cprint(int num){
-    printf("%d c!\n", num);
-}
-
-// print a lot of things to screen - call 3 different functions 
-// the process will need to swap pages
-void test5(){
-        fprintf(2,"-------------test5 start ---------------------\n");
-    for(int i = 0; i < 1000; i ++){
-        aprint(i);
-        bprint(i);
-        cprint(i);
-    }
-        fprintf(2,"-------------test5 finished ---------------------\n");
-}
 
 
 int main(int argc, char** argv){
     test1();
     test2();
     test3();
-    test4();
-    test5();
+
     exit(0);
 }
