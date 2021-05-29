@@ -538,11 +538,11 @@ int get_page_nfua(){
 int get_page_scfifo(){
   struct proc *p = myproc();
   struct page_metadata *pg;
-  uint64 min_creation_time = ~0;
+  uint64 min_creation_time = (uint64)~0;
   int min_creation_index = 1;
 
   findIndex:
-  min_creation_time = ~0;
+  min_creation_time = (uint64)~0;
   min_creation_index = 1;
 
 
@@ -554,9 +554,9 @@ int get_page_scfifo(){
   }
   pte_t* pte=walk(p->pagetable,p->pages_in_memory[min_creation_index].va,0); // return addr
   if((*pte & PTE_A)!=0){ // give second chance 
-  *pte &=~ PTE_A; // trun off the access flag
-  p->pages_in_memory[min_creation_index].creationOrder= ++p->creationTimeGenerator; // first ++ generator tgen update the pg creation time  
-  goto findIndex; // find again 
+    *pte &=~ PTE_A; // trun off the access flag
+    p->pages_in_memory[min_creation_index].creationOrder= ++p->creationTimeGenerator; // first ++ generator then update the pg creation time  
+    goto findIndex; // find again 
   }
   // if got here then we found pg with min time that PTE_A is turned off
   return min_creation_index;
@@ -568,16 +568,16 @@ int get_page_lapa(){
   int min_number_of_1=64;
   int index_with_min_1=-1;
   for(pg = p->pages_in_memory+1; pg < &p->pages_in_memory[MAX_PSYC_PAGES]; pg++){
-    int counter=0;
+    int counter=0,stoploop=0;
     if(pg->state){
-        for(int i=0;i<64;i++){ // do a mask for the 64 bits 
+        for(int i=0;i<64 && !stoploop;i++){ // do a mask for the 64 bits 
           uint64 mask = 1 << i;
           if((pg->age & mask)!=0)// if 1 is found 
               counter++;
-          if(counter>=min_number_of_1) // in case count is bigger than current min 
-            break;
+          if(counter>min_number_of_1) // in case count is bigger than current min 
+            stoploop=1;           // stop counting and break from loop
         }
-        if(counter<min_number_of_1){
+        if(counter<min_number_of_1 || (index_with_min_1==-1 && counter<=min_number_of_1 )){
           min_number_of_1=counter;
           index_with_min_1=(int)(pg - p->pages_in_memory);
         }
@@ -594,7 +594,7 @@ int get_page_by_alg(){
   #ifdef NFUA
   return get_page_nfua();
   #endif
-  #ifndef LAPA
+  #ifdef LAPA
   return get_page_lapa();
   #endif
   #ifdef NONE
