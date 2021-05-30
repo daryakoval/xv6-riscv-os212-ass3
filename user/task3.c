@@ -29,6 +29,8 @@ void test1(){
         pid = wait(&status);
         fprintf(2,"child: pid = %d exit with status %d\n", pid, status);
     }
+        fprintf(2,"-------------test1 finished ---------------------\n");
+
 }
 
 //Test2 testing alloc and dealloc (testing that delloa works fine, 
@@ -48,6 +50,9 @@ void test2(){
     fprintf(2,"allocated memory = %p\n", i);
     i = sbrk(-20*PGSIZE);
     fprintf(2,"deallocated memory = %p\n", i);
+
+    fprintf(2,"-------------test2 finished ---------------------\n");
+
 
 }
 
@@ -73,7 +78,12 @@ void test3(){
         fprintf(2,"child: pid = %d exit with status %d\n", pid, status);
         sbrk(-17*PGSIZE);
     }
+        fprintf(2,"-------------test3 finished ---------------------\n");
+
 }
+
+
+
 
 int main(int argc, char** argv){
     test1();

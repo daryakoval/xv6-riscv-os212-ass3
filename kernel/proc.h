@@ -86,6 +86,7 @@ struct page_metadata{
   uint64 va;      //virtual address
   int state;      // 0 = UNUSED, 1 = USED
   uint64 age;
+  uint64 creationOrder;
 };
 
 
@@ -118,5 +119,6 @@ struct proc {
   struct page_metadata pages_in_swapfile[MAX_PSYC_PAGES];  //to know which pages are in swapfile
   int num_pages_in_psyc;        //number of pages in memory
   int num_pages_in_swapfile;    //number of pages in swapfile
+  uint64 creationTimeGenerator; 
  
 };
